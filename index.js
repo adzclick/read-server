@@ -18,7 +18,9 @@ const port = process.env.PORT || 3000;
 // middleware
 const allowedOrigins = [
   "http://localhost:5173",
-  process.env.FRONTEND_URL, // e.g. https://yourdomain.com — set this in Render's env vars
+  "https://readskolkata.org",
+  "https://www.readskolkata.org",
+  process.env.FRONTEND_URL,
 ];
 
 app.use(cors({

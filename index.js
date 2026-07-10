@@ -37,7 +37,7 @@ app.use(express.json());
 
 // ── Static folder for uploaded images ──────────────────────
 // Files saved to /uploads will be publicly reachable at
-// http://localhost:3000/uploads/<filename>
+// https://read-server.onrender.com/uploads/<filename>
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });

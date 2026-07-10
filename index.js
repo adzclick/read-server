@@ -16,8 +16,19 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // middleware
+const allowedOrigins = [
+  "http://localhost:5173",
+  process.env.FRONTEND_URL, // e.g. https://yourdomain.com — set this in Render's env vars
+];
+
 app.use(cors({
-  origin: "http://localhost:5173",
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true,
 }));
 app.use(express.json());
@@ -173,7 +184,9 @@ app.get('/api/projects', async (req, res) => {
   }
 });
 
-// POST create a new project (field name: "image", plus title/location/stat/description)
+// POST create a new project — handles BOTH cases:
+//   1) Single "Add Project" form -> multipart/form-data with a real image file
+//   2) Bulk Excel upload         -> application/json with an imageUrl string
 app.post('/api/projects', upload.single('image'), async (req, res) => {
   try {
     const { title, location, stat, description } = req.body;
@@ -182,8 +195,18 @@ app.post('/api/projects', upload.single('image'), async (req, res) => {
       return res.status(400).json({ message: "Title, location and description are required." });
     }
 
-    if (!req.file) {
-      return res.status(400).json({ message: "A cover image is required." });
+    let imageUrl;
+    let filename = null;
+
+    if (req.file) {
+      // Came from the single-add form — real file uploaded via multer
+      filename = req.file.filename;
+      imageUrl = toPublicUrl(req, req.file.filename);
+    } else if (req.body.imageUrl) {
+      // Came from bulk Excel upload — URL provided directly, no file involved
+      imageUrl = req.body.imageUrl;
+    } else {
+      return res.status(400).json({ message: "A cover image or imageUrl is required." });
     }
 
     const newProject = {
@@ -191,8 +214,8 @@ app.post('/api/projects', upload.single('image'), async (req, res) => {
       location,
       stat: stat || "",
       description,
-      filename: req.file.filename,
-      imageUrl: toPublicUrl(req, req.file.filename),
+      filename, // null for bulk-uploaded projects that only have an external image URL
+      imageUrl,
       createdAt: new Date(),
     };
 
@@ -217,10 +240,13 @@ app.delete('/api/projects/:id', async (req, res) => {
       return res.status(404).json({ message: "Project not found." });
     }
 
-    const filePath = path.join(uploadsDir, project.filename);
-    fs.unlink(filePath, (err) => {
-      if (err) console.log("Could not delete file from disk:", err.message);
-    });
+    // Only remove a local file if one actually exists — bulk/URL-based projects have none
+    if (project.filename) {
+      const filePath = path.join(uploadsDir, project.filename);
+      fs.unlink(filePath, (err) => {
+        if (err) console.log("Could not delete file from disk:", err.message);
+      });
+    }
 
     await projectsCollection.deleteOne({ _id: new ObjectId(id) });
     res.status(200).json({ message: "Project deleted." });
